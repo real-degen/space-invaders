@@ -76,12 +76,23 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // Player (Green, original style)
-        const playerGeometry = new THREE.BoxGeometry(1, 0.5, 0.5); // More rectangular like original
-        const playerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-        const player = new THREE.Mesh(playerGeometry, playerMaterial);
-        player.position.y = -8;
-        scene.add(player);
+        // Player Spaceship (More realistic, retro-inspired)
+        const playerGroup = new THREE.Group();
+        const hullGeometry = new THREE.BoxGeometry(1.2, 0.6, 0.4); // Main body
+        const hullMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00, shininess: 30 });
+        const hull = new THREE.Mesh(hullGeometry, hullMaterial);
+        const cockpitGeometry = new THREE.ConeGeometry(0.3, 0.5, 8); // Cockpit
+        const cockpit = new THREE.Mesh(cockpitGeometry, hullMaterial);
+        cockpit.position.set(0, 0.55, 0);
+        cockpit.rotation.x = Math.PI / 2;
+        const wingGeometry = new THREE.BoxGeometry(0.4, 0.1, 1); // Wings
+        const wingLeft = new THREE.Mesh(wingGeometry, hullMaterial);
+        wingLeft.position.set(-0.8, 0, 0);
+        const wingRight = new THREE.Mesh(wingGeometry, hullMaterial);
+        wingRight.position.set(0.8, 0, 0);
+        playerGroup.add(hull, cockpit, wingLeft, wingRight);
+        playerGroup.position.y = -8;
+        scene.add(playerGroup);
 
         // Lighting
         const ambientLight = new THREE.AmbientLight(0x404040);
@@ -163,9 +174,9 @@
         for (let i = 0; i < 4; i++) spawnBackgroundElement('planet');
         for (let i = 0; i < 2; i++) spawnBackgroundElement('spacecraft');
 
-        // Invaders (White, wobble effect)
+        // Invaders (Reverted to Spheres)
         const invaders = [];
-        const invaderGeometry = new THREE.BoxGeometry(0.8, 0.4, 0.4); // Pixel-like
+        const invaderGeometry = new THREE.SphereGeometry(0.4, 16, 16);
         const invaderMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
         
         function spawnInvaders(level) {
@@ -228,14 +239,29 @@
             playSound(660, 50);
         }
 
-        // Power-Ups
+        // Power-Ups (Box-shaped, gift-wrapped)
         const powerUps = [];
-        const powerUpGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+        const powerUpGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
         const powerUpTypes = [
             { type: 'speed', color: 0x00ff00, effect: () => playerSpeed = 0.2 },
             { type: 'spread', color: 0xffff00, effect: () => spreadActive = true },
             { type: 'life', color: 0x00ffff, effect: () => { lives++; document.getElementById('lives').textContent = lives; } }
         ];
+
+        function spawnPowerUp(x, y) {
+            const type = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+            const powerUp = new THREE.Mesh(powerUpGeometry, new THREE.MeshBasicMaterial({ color: type.color }));
+            const ribbon = new THREE.Mesh(
+                new THREE.BoxGeometry(0.55, 0.1, 0.55),
+                new THREE.MeshBasicMaterial({ color: 0xff0000 })
+            );
+            powerUp.add(ribbon);
+            powerUp.position.set(x, y, 0);
+            powerUp.type = type.type;
+            powerUp.effect = type.effect;
+            powerUps.push(powerUp);
+            scene.add(powerUp);
+        }
 
         // Game variables
         let moveLeft = false;
@@ -244,14 +270,12 @@
         let lastShot = 0;
         let lastEnemyShot = 0;
         let lastMysterySpawn = 0;
-        let lastPowerUpSpawn = 0;
         let lastBackgroundSpawn = 0;
         let shootCooldown = 0.3;
         let shootCooldownActive = 0.3;
         let playerSpeed = 0.1;
         let enemyShootCooldown = 1.5;
         const mysterySpawnInterval = 15;
-        const powerUpSpawnInterval = 10 + Math.random() * 10;
         const backgroundSpawnInterval = 2;
         let score = 0;
         let lives = 3;
@@ -311,20 +335,20 @@
             if (spreadActive) {
                 for (let i = -1; i <= 1; i++) {
                     const bullet = new THREE.Mesh(spreadBulletGeometry, spreadBulletMaterial);
-                    bullet.position.set(player.position.x, player.position.y + 1, 0);
+                    bullet.position.set(playerGroup.position.x, playerGroup.position.y + 1, 0);
                     bullet.velocity = new THREE.Vector3(i * 0.1, 0.3, 0);
                     playerBullets.push(bullet);
                     scene.add(bullet);
                 }
             } else {
                 const bullet = new THREE.Mesh(bulletGeometry, playerBulletMaterial);
-                bullet.position.set(player.position.x, player.position.y + 1, 0);
+                bullet.position.set(playerGroup.position.x, playerGroup.position.y + 1, 0);
                 bullet.velocity = new THREE.Vector3(0, 0.3, 0);
                 playerBullets.push(bullet);
                 scene.add(bullet);
             }
             for (let i = 0; i < 5; i++) {
-                particles.push(createBulletParticle(player.position.x, player.position.y + 1));
+                particles.push(createBulletParticle(playerGroup.position.x, playerGroup.position.y + 1));
             }
             playSound(440, 100);
             lastShot = currentTime;
@@ -355,21 +379,6 @@
             scene.add(mysteryShip);
             lastMysterySpawn = currentTime;
             playSound(660, 200);
-        }
-
-        function spawnPowerUp() {
-            if (gameOver || paused) return;
-            const currentTime = Date.now() / 1000;
-            if (currentTime - lastPowerUpSpawn < powerUpSpawnInterval) return;
-            
-            const type = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
-            const powerUp = new THREE.Mesh(powerUpGeometry, new THREE.MeshBasicMaterial({ color: type.color }));
-            powerUp.position.set(Math.random() * 18 - 9, 10, 0);
-            powerUp.type = type.type;
-            powerUp.effect = type.effect;
-            powerUps.push(powerUp);
-            scene.add(powerUp);
-            lastPowerUpSpawn = currentTime;
         }
 
         function spawnBackground() {
@@ -441,6 +450,7 @@
                             scene.remove(playerBullets[i]);
                             scene.remove(invaders[j]);
                             playerBullets.splice(i, 1);
+                            if (Math.random() < 0.2) spawnPowerUp(x, y); // 20% chance to drop power-up
                             invaders.splice(j, 1);
                             score += 10;
                             invadersKilled++;
@@ -470,7 +480,7 @@
 
             for (let i = enemyBullets.length - 1; i >= 0; i--) {
                 const bulletBox = new THREE.Box3().setFromObject(enemyBullets[i]);
-                const playerBox = new THREE.Box3().setFromObject(player);
+                const playerBox = new THREE.Box3().setFromObject(playerGroup);
                 if (bulletBox.intersectsBox(playerBox)) {
                     scene.remove(enemyBullets[i]);
                     enemyBullets.splice(i, 1);
@@ -484,7 +494,7 @@
 
             for (let i = powerUps.length - 1; i >= 0; i--) {
                 const powerUpBox = new THREE.Box3().setFromObject(powerUps[i]);
-                const playerBox = new THREE.Box3().setFromObject(player);
+                const playerBox = new THREE.Box3().setFromObject(playerGroup);
                 if (powerUpBox.intersectsBox(playerBox)) {
                     powerUps[i].effect();
                     if (powerUps[i].type === 'speed') powerUpTimer.speed = Date.now() / 1000 + 10;
@@ -541,7 +551,7 @@
             for (let i = 0; i < 4; i++) spawnBackgroundElement('planet');
             for (let i = 0; i < 2; i++) spawnBackgroundElement('spacecraft');
             spawnInvaders(1);
-            player.position.x = 0;
+            playerGroup.position.x = 0;
             score = 0;
             lives = 3;
             level = 1;
@@ -566,8 +576,8 @@
                 return;
             }
 
-            if (moveLeft && player.position.x > -9) player.position.x -= playerSpeed;
-            if (moveRight && player.position.x < 9) player.position.x += playerSpeed;
+            if (moveLeft && playerGroup.position.x > -9) playerGroup.position.x -= playerSpeed;
+            if (moveRight && playerGroup.position.x < 9) playerGroup.position.x += playerSpeed;
 
             animationTimer += 0.016;
             const invaderSpeed = baseInvaderSpeed * (1 + level * 0.3);
@@ -638,7 +648,6 @@
             }
 
             spawnMysteryShip();
-            spawnPowerUp();
             spawnBackground();
             enemyShoot();
             checkCollisions();
