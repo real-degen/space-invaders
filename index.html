@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Space Invaders - Three.js with Cosmic Background</title>
+    <title>Space Invaders - Three.js Enhanced</title>
     <style>
         body { margin: 0; overflow: hidden; background: black; }
         canvas { display: block; }
@@ -10,23 +10,23 @@
             top: 10px; 
             left: 10px; 
             color: white; 
-            font-family: Arial; 
+            font-family: 'Courier New', monospace; 
         }
         #powerup-indicators {
             position: absolute;
             top: 50px;
             left: 10px;
-            color: yellow;
-            font-family: Arial;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
             font-size: 20px;
         }
-        #game-over-screen {
+        #game-over-screen, #pause-screen {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
             color: white;
-            font-family: Arial;
+            font-family: 'Courier New', monospace;
             text-align: center;
             background: rgba(0, 0, 0, 0.8);
             padding: 20px;
@@ -38,6 +38,12 @@
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
+            background: #00ff00;
+            color: black;
+            border: none;
+        }
+        #leaderboard {
+            margin-top: 20px;
         }
     </style>
 </head>
@@ -53,7 +59,13 @@
         <p>Score: <span id="final-score"></span></p>
         <p>Level Reached: <span id="final-level"></span></p>
         <p>Invaders Killed: <span id="invaders-killed"></span></p>
-        <button onclick="restartGame()">Play Again</button>
+        <div id="leaderboard"></div>
+        <input id="player-name" type="text" placeholder="Enter your name" maxlength="10" style="margin-top: 10px;">
+        <button onclick="submitScoreAndRestart()">Submit & Play Again</button>
+    </div>
+    <div id="pause-screen">
+        <h1>Paused</h1>
+        <p>Press P to Resume</p>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script>
@@ -64,79 +76,104 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // Player
-        const playerGeometry = new THREE.ConeGeometry(1, 2, 32);
-        const playerMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+        // Player (Green, original style)
+        const playerGeometry = new THREE.BoxGeometry(1, 0.5, 0.5); // More rectangular like original
+        const playerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
         const player = new THREE.Mesh(playerGeometry, playerMaterial);
         player.position.y = -8;
         scene.add(player);
 
         // Lighting
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        const ambientLight = new THREE.AmbientLight(0x404040);
         scene.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
         directionalLight.position.set(0, 1, 1);
         scene.add(directionalLight);
 
         // Cosmic Background
-        const planets = [
-            { name: 'Mercury', color: 0xaaaaaa, temp: 'hot', size: 2, distance: -50 }, // Gray, hot
-            { name: 'Venus', color: 0xffff99, temp: 'hot', size: 3, distance: -100 }, // Yellowish, hot
-            { name: 'Earth', color: 0x0066ff, temp: 'moderate', size: 3.5, distance: -150 }, // Blue, moderate
-            { name: 'Mars', color: 0xff4500, temp: 'cold', size: 2.5, distance: -200 }, // Red, cold
-            { name: 'Jupiter', color: 0xffa500, temp: 'cold', size: 6, distance: -300 }, // Orange, cold
-            { name: 'Saturn', color: 0xffd700, temp: 'cold', size: 5, distance: -400 }, // Gold, cold
-            { name: 'Uranus', color: 0x00ffff, temp: 'very cold', size: 4, distance: -500 }, // Cyan, very cold
-            { name: 'Neptune', color: 0x0000ff, temp: 'very cold', size: 4, distance: -600 }, // Blue, very cold
-            { name: 'Pluto', color: 0x808080, temp: 'very cold', size: 1.5, distance: -700 }, // Gray, very cold
-            { name: 'Beyond', color: 0x111111, temp: 'space', size: 0, distance: -800 } // Deep space black
+        const planetsData = [
+            { name: 'Mercury', color: 0x808080, temp: 'hot', y: 20 },
+            { name: 'Venus', color: 0xffff99, temp: 'hot', y: 40 },
+            { name: 'Earth', color: 0x0066ff, temp: 'temperate', y: 60 },
+            { name: 'Mars', color: 0xff4500, temp: 'cold', y: 80 },
+            { name: 'Jupiter', color: 0xffa500, temp: 'cold', y: 100 },
+            { name: 'Saturn', color: 0xeedd82, temp: 'cold', y: 120 },
+            { name: 'Uranus', color: 0x66cccc, temp: 'cold', y: 140 },
+            { name: 'Neptune', color: 0x0000ff, temp: 'cold', y: 160 },
+            { name: 'Pluto', color: 0x999999, temp: 'cold', y: 180 },
+            { name: 'Beyond', color: 0x1a0033, temp: 'cosmic', y: 200 }
         ];
-        let currentPlanetIndex = 0;
-        let backgroundZ = 0;
-        const backgroundSpeed = 0.02;
+        let backgroundY = 0;
 
         // Background Elements
-        const backgroundObjects = [];
-        function spawnBackgroundObject(type) {
-            let geometry, material, object;
-            if (type === 'meteor') {
-                geometry = new THREE.SphereGeometry(Math.random() * 0.5 + 0.2, 8, 8);
-                material = new THREE.MeshBasicMaterial({ color: 0x666666 });
-            } else if (type === 'comet') {
-                geometry = new THREE.SphereGeometry(0.3, 8, 8);
-                material = new THREE.MeshBasicMaterial({ color: 0xaaaaaa });
-            } else if (type === 'planet') {
-                const planet = planets[Math.floor(Math.random() * (planets.length - 1))];
-                geometry = new THREE.SphereGeometry(planet.size, 16, 16);
-                material = new THREE.MeshBasicMaterial({ color: planet.color });
-            } else if (type === 'spacecraft') {
-                geometry = new THREE.BoxGeometry(0.5, 0.2, 0.3);
-                material = new THREE.MeshBasicMaterial({ color: 0xcccccc });
+        const backgroundElements = [];
+        function spawnBackgroundElement(type) {
+            let geometry, material, mesh;
+            switch (type) {
+                case 'star':
+                    geometry = new THREE.SphereGeometry(0.05, 8, 8);
+                    material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                    mesh = new THREE.Mesh(geometry, material);
+                    mesh.position.set(Math.random() * 40 - 20, Math.random() * 20 + 10, -10);
+                    mesh.twinkle = Math.random() * 0.02;
+                    break;
+                case 'meteor':
+                    geometry = new THREE.SphereGeometry(0.2, 8, 8);
+                    material = new THREE.MeshBasicMaterial({ color: 0x666666 });
+                    mesh = new THREE.Mesh(geometry, material);
+                    mesh.position.set(Math.random() * 40 - 20, 20, -15);
+                    mesh.velocity = new THREE.Vector3((Math.random() - 0.5) * 0.05, -0.1, 0);
+                    mesh.rotationVelocity = (Math.random() - 0.5) * 0.05;
+                    break;
+                case 'comet':
+                    geometry = new THREE.ConeGeometry(0.3, 1, 8);
+                    material = new THREE.MeshBasicMaterial({ color: 0x99ccff });
+                    mesh = new THREE.Mesh(geometry, material);
+                    mesh.position.set(Math.random() * 40 - 20, 20, -12);
+                    mesh.velocity = new THREE.Vector3((Math.random() - 0.5) * 0.1, -0.15, 0);
+                    break;
+                case 'planet':
+                    const planet = planetsData[Math.floor(Math.random() * (planetsData.length - 1))];
+                    geometry = new THREE.SphereGeometry(Math.random() * 2 + 1, 16, 16);
+                    material = new THREE.MeshPhongMaterial({ color: planet.color, shininess: 10 });
+                    mesh = new THREE.Mesh(geometry, material);
+                    mesh.position.set(Math.random() * 40 - 20, planet.y, -20);
+                    break;
+                case 'spacecraft':
+                    geometry = new THREE.BoxGeometry(0.5, 0.2, 0.3);
+                    material = new THREE.MeshBasicMaterial({ color: 0xcccccc });
+                    mesh = new THREE.Mesh(geometry, material);
+                    mesh.position.set(Math.random() * 40 - 20, 20, -18);
+                    mesh.velocity = new THREE.Vector3((Math.random() - 0.5) * 0.08, -0.05, 0);
+                    const exhaust = new THREE.Mesh(
+                        new THREE.ConeGeometry(0.1, 0.3, 8),
+                        new THREE.MeshBasicMaterial({ color: 0xff4500 })
+                    );
+                    exhaust.position.set(0, -0.25, 0);
+                    mesh.add(exhaust);
+                    break;
             }
-            object = new THREE.Mesh(geometry, material);
-            object.position.set(Math.random() * 40 - 20, Math.random() * 20 - 10, -50);
-            object.velocity = new THREE.Vector3((Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05, backgroundSpeed);
-            scene.add(object);
-            backgroundObjects.push(object);
+            scene.add(mesh);
+            backgroundElements.push(mesh);
         }
 
-        // Spawn initial background objects
-        for (let i = 0; i < 10; i++) spawnBackgroundObject('meteor');
-        for (let i = 0; i < 5; i++) spawnBackgroundObject('comet');
-        for (let i = 0; i < 3; i++) spawnBackgroundObject('planet');
-        for (let i = 0; i < 2; i++) spawnBackgroundObject('spacecraft');
+        for (let i = 0; i < 100; i++) spawnBackgroundElement('star');
+        for (let i = 0; i < 5; i++) spawnBackgroundElement('meteor');
+        for (let i = 0; i < 3; i++) spawnBackgroundElement('comet');
+        for (let i = 0; i < 4; i++) spawnBackgroundElement('planet');
+        for (let i = 0; i < 2; i++) spawnBackgroundElement('spacecraft');
 
-        // Invaders
+        // Invaders (White, wobble effect)
         const invaders = [];
-        const invaderGeometry = new THREE.SphereGeometry(0.4, 16, 16);
-        const invaderMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+        const invaderGeometry = new THREE.BoxGeometry(0.8, 0.4, 0.4); // Pixel-like
+        const invaderMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
         
         function spawnInvaders(level) {
             const invaderCount = 5 + level * 2;
             for (let i = 0; i < invaderCount; i++) {
                 const invader = new THREE.Mesh(invaderGeometry, invaderMaterial);
                 invader.position.set(Math.random() * 18 - 9, 10 + Math.random() * 5, 0);
-                invader.animationState = 0;
+                invader.wobble = Math.random() * 0.05;
                 invaders.push(invader);
                 scene.add(invader);
             }
@@ -146,14 +183,16 @@
         // Mystery Ship
         let mysteryShip = null;
         const mysteryGeometry = new THREE.BoxGeometry(1, 0.5, 0.5);
-        const mysteryMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+        const mysteryMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 
         // Bullets
         const playerBullets = [];
         const enemyBullets = [];
-        const bulletGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1, 16);
+        const bulletGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1, 8);
+        const spreadBulletGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1, 8);
         const enemyBulletGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.3, 8);
-        const playerBulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        let playerBulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const spreadBulletMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
         const enemyBulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
         // Bullet particles
@@ -193,8 +232,8 @@
         const powerUps = [];
         const powerUpGeometry = new THREE.SphereGeometry(0.3, 16, 16);
         const powerUpTypes = [
-            { type: 'speed', color: 0x0000ff, effect: () => playerSpeed = 0.2 },
-            { type: 'rapid', color: 0xffff00, effect: () => shootCooldownActive = 0.1 },
+            { type: 'speed', color: 0x00ff00, effect: () => playerSpeed = 0.2 },
+            { type: 'spread', color: 0xffff00, effect: () => spreadActive = true },
             { type: 'life', color: 0x00ffff, effect: () => { lives++; document.getElementById('lives').textContent = lives; } }
         ];
 
@@ -206,20 +245,25 @@
         let lastEnemyShot = 0;
         let lastMysterySpawn = 0;
         let lastPowerUpSpawn = 0;
+        let lastBackgroundSpawn = 0;
         let shootCooldown = 0.3;
         let shootCooldownActive = 0.3;
         let playerSpeed = 0.1;
         let enemyShootCooldown = 1.5;
         const mysterySpawnInterval = 15;
         const powerUpSpawnInterval = 10 + Math.random() * 10;
+        const backgroundSpawnInterval = 2;
         let score = 0;
         let lives = 3;
         let level = 1;
         let invadersKilled = 0;
         let gameOver = false;
+        let paused = false;
         let animationTimer = 0;
-        let powerUpTimer = { speed: 0, rapid: 0 };
+        let powerUpTimer = { speed: 0, spread: 0 };
+        let spreadActive = false;
         let particles = [];
+        let leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || [];
 
         // Audio
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -236,7 +280,14 @@
 
         // Controls
         document.addEventListener('keydown', (event) => {
-            if (gameOver) return;
+            if (event.key === 'p' || event.key === 'P') {
+                if (!gameOver) {
+                    paused = !paused;
+                    document.getElementById('pause-screen').style.display = paused ? 'block' : 'none';
+                }
+                return;
+            }
+            if (gameOver || paused) return;
             switch(event.key) {
                 case 'ArrowLeft': moveLeft = true; break;
                 case 'ArrowRight': moveRight = true; break;
@@ -245,6 +296,7 @@
         });
 
         document.addEventListener('keyup', (event) => {
+            if (gameOver || paused) return;
             switch(event.key) {
                 case 'ArrowLeft': moveLeft = false; break;
                 case 'ArrowRight': moveRight = false; break;
@@ -252,14 +304,25 @@
         });
 
         function shoot() {
-            if (gameOver) return;
+            if (gameOver || paused) return;
             const currentTime = Date.now() / 1000;
             if (currentTime - lastShot < shootCooldownActive) return;
-            
-            const bullet = new THREE.Mesh(bulletGeometry, playerBulletMaterial);
-            bullet.position.set(player.position.x, player.position.y + 1, 0);
-            playerBullets.push(bullet);
-            scene.add(bullet);
+
+            if (spreadActive) {
+                for (let i = -1; i <= 1; i++) {
+                    const bullet = new THREE.Mesh(spreadBulletGeometry, spreadBulletMaterial);
+                    bullet.position.set(player.position.x, player.position.y + 1, 0);
+                    bullet.velocity = new THREE.Vector3(i * 0.1, 0.3, 0);
+                    playerBullets.push(bullet);
+                    scene.add(bullet);
+                }
+            } else {
+                const bullet = new THREE.Mesh(bulletGeometry, playerBulletMaterial);
+                bullet.position.set(player.position.x, player.position.y + 1, 0);
+                bullet.velocity = new THREE.Vector3(0, 0.3, 0);
+                playerBullets.push(bullet);
+                scene.add(bullet);
+            }
             for (let i = 0; i < 5; i++) {
                 particles.push(createBulletParticle(player.position.x, player.position.y + 1));
             }
@@ -268,7 +331,7 @@
         }
 
         function enemyShoot() {
-            if (gameOver || invaders.length === 0) return;
+            if (gameOver || paused || invaders.length === 0) return;
             const currentTime = Date.now() / 1000;
             const adjustedCooldown = enemyShootCooldown / (1 + level * 0.2);
             if (currentTime - lastEnemyShot < adjustedCooldown) return;
@@ -283,6 +346,7 @@
         }
 
         function spawnMysteryShip() {
+            if (gameOver || paused) return;
             const currentTime = Date.now() / 1000;
             if (currentTime - lastMysterySpawn < mysterySpawnInterval || mysteryShip) return;
             
@@ -294,17 +358,27 @@
         }
 
         function spawnPowerUp() {
+            if (gameOver || paused) return;
             const currentTime = Date.now() / 1000;
             if (currentTime - lastPowerUpSpawn < powerUpSpawnInterval) return;
             
             const type = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
-            const powerUp = new THREE.Mesh(powerUpGeometry, new THREE.MeshPhongMaterial({ color: type.color }));
+            const powerUp = new THREE.Mesh(powerUpGeometry, new THREE.MeshBasicMaterial({ color: type.color }));
             powerUp.position.set(Math.random() * 18 - 9, 10, 0);
             powerUp.type = type.type;
             powerUp.effect = type.effect;
             powerUps.push(powerUp);
             scene.add(powerUp);
             lastPowerUpSpawn = currentTime;
+        }
+
+        function spawnBackground() {
+            if (gameOver || paused) return;
+            const currentTime = Date.now() / 1000;
+            if (currentTime - lastBackgroundSpawn < backgroundSpawnInterval) return;
+            const types = ['meteor', 'comet', 'spacecraft'];
+            spawnBackgroundElement(types[Math.floor(Math.random() * types.length)]);
+            lastBackgroundSpawn = currentTime;
         }
 
         function nextLevel() {
@@ -318,34 +392,43 @@
             const currentTime = Date.now() / 1000;
             let text = '';
             if (powerUpTimer.speed > currentTime) text += 'SPEED BOOST\n';
-            if (powerUpTimer.rapid > currentTime) text += 'RAPID FIRE';
+            if (powerUpTimer.spread > currentTime) text += 'SPREAD SHOT';
             const indicators = document.getElementById('powerup-indicators');
             indicators.textContent = text;
             indicators.style.opacity = Math.sin(currentTime * 10) > 0 ? 1 : 0;
         }
 
         function updateBackground() {
-            backgroundZ -= backgroundSpeed;
-            if (backgroundZ <= planets[currentPlanetIndex + 1]?.distance) {
-                currentPlanetIndex++;
-                if (currentPlanetIndex >= planets.length) currentPlanetIndex = planets.length - 1;
+            if (paused) return;
+            backgroundY += 0.02;
+            let currentPlanet = planetsData[0];
+            for (let i = 0; i < planetsData.length; i++) {
+                if (backgroundY < planetsData[i].y) {
+                    currentPlanet = planetsData[i - 1] || planetsData[0];
+                    break;
+                }
+                if (i === planetsData.length - 1) currentPlanet = planetsData[i];
             }
-            renderer.setClearColor(planets[currentPlanetIndex].color, 1);
+            document.body.style.backgroundColor = `#${currentPlanet.color.toString(16).padStart(6, '0')}`;
 
-            // Move background objects
-            for (let i = backgroundObjects.length - 1; i >= 0; i--) {
-                backgroundObjects[i].position.add(backgroundObjects[i].velocity);
-                if (backgroundObjects[i].position.z > 10) {
-                    scene.remove(backgroundObjects[i]);
-                    backgroundObjects.splice(i, 1);
-                    // Respawn
-                    const types = ['meteor', 'comet', 'planet', 'spacecraft'];
-                    spawnBackgroundObject(types[Math.floor(Math.random() * types.length)]);
+            for (let i = backgroundElements.length - 1; i >= 0; i--) {
+                const elem = backgroundElements[i];
+                if (elem.twinkle) {
+                    elem.scale.setScalar(1 + Math.sin(Date.now() * elem.twinkle) * 0.2);
+                }
+                if (elem.velocity) {
+                    elem.position.add(elem.velocity);
+                    if (elem.rotationVelocity) elem.rotation.z += elem.rotationVelocity;
+                    if (elem.position.y < -20 || Math.abs(elem.position.x) > 20) {
+                        scene.remove(elem);
+                        backgroundElements.splice(i, 1);
+                    }
                 }
             }
         }
 
         function checkCollisions() {
+            if (paused) return;
             for (let i = playerBullets.length - 1; i >= 0; i--) {
                 for (let j = invaders.length - 1; j >= 0; j--) {
                     if (playerBullets[i] && invaders[j]) {
@@ -405,7 +488,7 @@
                 if (powerUpBox.intersectsBox(playerBox)) {
                     powerUps[i].effect();
                     if (powerUps[i].type === 'speed') powerUpTimer.speed = Date.now() / 1000 + 10;
-                    if (powerUps[i].type === 'rapid') powerUpTimer.rapid = Date.now() / 1000 + 10;
+                    if (powerUps[i].type === 'spread') powerUpTimer.spread = Date.now() / 1000 + 10;
                     scene.remove(powerUps[i]);
                     powerUps.splice(i, 1);
                     playSound(1100, 150);
@@ -419,7 +502,24 @@
             document.getElementById('final-score').textContent = score;
             document.getElementById('final-level').textContent = level;
             document.getElementById('invaders-killed').textContent = invadersKilled;
+            updateLeaderboard();
             gameOverScreen.style.display = 'block';
+        }
+
+        function updateLeaderboard() {
+            const leaderboardDiv = document.getElementById('leaderboard');
+            leaderboard.sort((a, b) => b.score - a.score);
+            leaderboard = leaderboard.slice(0, 5);
+            leaderboardDiv.innerHTML = '<h3>Leaderboard</h3>' + leaderboard.map((entry, i) => 
+                `${i + 1}. ${entry.name}: ${entry.score}`
+            ).join('<br>');
+        }
+
+        function submitScoreAndRestart() {
+            const name = document.getElementById('player-name').value || 'Player';
+            leaderboard.push({ name, score });
+            localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+            restartGame();
         }
 
         function restartGame() {
@@ -429,16 +529,18 @@
             while (powerUps.length > 0) scene.remove(powerUps.pop());
             while (particles.length > 0) scene.remove(particles.pop());
             while (explosionParticles.length > 0) scene.remove(explosionParticles.pop());
-            while (backgroundObjects.length > 0) scene.remove(backgroundObjects.pop());
+            while (backgroundElements.length > 0) scene.remove(backgroundElements.pop());
             if (mysteryShip) {
                 scene.remove(mysteryShip);
                 mysteryShip = null;
             }
+            backgroundY = 0;
+            for (let i = 0; i < 100; i++) spawnBackgroundElement('star');
+            for (let i = 0; i < 5; i++) spawnBackgroundElement('meteor');
+            for (let i = 0; i < 3; i++) spawnBackgroundElement('comet');
+            for (let i = 0; i < 4; i++) spawnBackgroundElement('planet');
+            for (let i = 0; i < 2; i++) spawnBackgroundElement('spacecraft');
             spawnInvaders(1);
-            for (let i = 0; i < 10; i++) spawnBackgroundObject('meteor');
-            for (let i = 0; i < 5; i++) spawnBackgroundObject('comet');
-            for (let i = 0; i < 3; i++) spawnBackgroundObject('planet');
-            for (let i = 0; i < 2; i++) spawnBackgroundObject('spacecraft');
             player.position.x = 0;
             score = 0;
             lives = 3;
@@ -446,20 +548,23 @@
             invadersKilled = 0;
             playerSpeed = 0.1;
             shootCooldownActive = 0.3;
-            powerUpTimer = { speed: 0, rapid: 0 };
-            backgroundZ = 0;
-            currentPlanetIndex = 0;
+            spreadActive = false;
+            powerUpTimer = { speed: 0, spread: 0 };
             document.getElementById('score').textContent = score;
             document.getElementById('lives').textContent = lives;
             document.getElementById('level').textContent = level;
             document.getElementById('powerup-indicators').textContent = '';
             document.getElementById('game-over-screen').style.display = 'none';
             gameOver = false;
+            paused = false;
         }
 
         function animate() {
             requestAnimationFrame(animate);
-            if (gameOver) return;
+            if (gameOver || paused) {
+                renderer.render(scene, camera);
+                return;
+            }
 
             if (moveLeft && player.position.x > -9) player.position.x -= playerSpeed;
             if (moveRight && player.position.x < 9) player.position.x += playerSpeed;
@@ -468,17 +573,14 @@
             const invaderSpeed = baseInvaderSpeed * (1 + level * 0.3);
             invaders.forEach(invader => {
                 invader.position.y -= invaderSpeed;
-                if (animationTimer > 0.5) {
-                    invader.animationState = 1 - invader.animationState;
-                    invader.position.z = invader.animationState * 0.2;
-                }
+                invader.position.x += Math.sin(animationTimer * invader.wobble) * 0.1;
                 if (invader.position.y < -7) endGame();
             });
             if (animationTimer > 0.5) animationTimer = 0;
 
             for (let i = playerBullets.length - 1; i >= 0; i--) {
-                playerBullets[i].position.y += 0.3;
-                if (playerBullets[i].position.y > 10) {
+                playerBullets[i].position.add(playerBullets[i].velocity);
+                if (playerBullets[i].position.y > 10 || Math.abs(playerBullets[i].position.x) > 10) {
                     scene.remove(playerBullets[i]);
                     playerBullets.splice(i, 1);
                 }
@@ -530,13 +632,14 @@
                 playerSpeed = 0.1;
                 powerUpTimer.speed = 0;
             }
-            if (powerUpTimer.rapid && currentTime > powerUpTimer.rapid) {
-                shootCooldownActive = 0.3;
-                powerUpTimer.rapid = 0;
+            if (powerUpTimer.spread && currentTime > powerUpTimer.spread) {
+                spreadActive = false;
+                powerUpTimer.spread = 0;
             }
 
             spawnMysteryShip();
             spawnPowerUp();
+            spawnBackground();
             enemyShoot();
             checkCollisions();
             updatePowerUpIndicators();
