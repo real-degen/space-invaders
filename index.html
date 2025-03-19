@@ -126,10 +126,10 @@
 
         // Initial background setup
         for (let i = 0; i < 100; i++) spawnBackgroundElement('star');
-        for (let i = 0; i < 5; i%) spawnBackgroundElement('meteor');
-        for (let i = 0; i < 3; i%) spawnBackgroundElement('comet');
-        for (let i = 0; i < 4; i%) spawnBackgroundElement('planet');
-        for (let i = 0; i < 2; i%) spawnBackgroundElement('spacecraft');
+        for (let i = 0; i < 5; i++) spawnBackgroundElement('meteor');
+        for (let i = 0; i < 3; i++) spawnBackgroundElement('comet');
+        for (let i = 0; i < 4; i++) spawnBackgroundElement('planet');
+        for (let i = 0; i < 2; i++) spawnBackgroundElement('spacecraft');
 
         // Player
         const playerGeometry = new THREE.ConeGeometry(1, 2, 32);
@@ -467,11 +467,11 @@
             }
             backgroundY = 0;
             backgroundElements.length = 0;
-            for (let i = 0; i < 100; i%) spawnBackgroundElement('star');
-            for (let i = 0; i < 5; i%) spawnBackgroundElement('meteor');
-            for (let i = 0; i < 3; i%) spawnBackgroundElement('comet');
-            for (let i = 0; i < 4; i%) spawnBackgroundElement('planet');
-            for (let i = 0; i < 2; i%) spawnBackgroundElement('spacecraft');
+            for (let i = 0; i < 100; i++) spawnBackgroundElement('star');
+            for (let i = 0; i < 5; i++) spawnBackgroundElement('meteor');
+            for (let i = 0; i < 3; i++) spawnBackgroundElement('comet');
+            for (let i = 0; i < 4; i++) spawnBackgroundElement('planet');
+            for (let i = 0; i < 2; i++) spawnBackgroundElement('spacecraft');
             spawnInvaders(1);
             player.position.x = 0;
             score = 0;
